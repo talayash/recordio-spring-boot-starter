@@ -103,22 +103,23 @@ public class RecordIOAspect {
         long startTime = System.currentTimeMillis();
 
         // Proceed with the actual method execution
-        Object result;
+        Object result = null;
         Throwable thrownException = null;
         try {
             result = joinPoint.proceed();
+            return result;
         } catch (Throwable t) {
             thrownException = t;
             throw t;
         } finally {
             long duration = System.currentTimeMillis() - startTime;
-            int statusCode = response.getStatus();
+            int statusCode = thrownException != null ? 500 : response.getStatus();
 
             // Check if we should record based on condition
             if (shouldRecord(annotation, statusCode, duration)) {
                 try {
                     RecordEntry entry = buildRecordEntry(
-                            joinPoint, annotation, request, response,
+                            joinPoint, annotation, request, response, result,
                             correlationId, timestamp, duration, statusCode
                     );
 
@@ -132,8 +133,6 @@ public class RecordIOAspect {
                 }
             }
         }
-
-        return result;
     }
 
     private RecordIO getAnnotation(ProceedingJoinPoint joinPoint) {
@@ -180,7 +179,7 @@ public class RecordIOAspect {
     }
 
     private RecordEntry buildRecordEntry(ProceedingJoinPoint joinPoint, RecordIO annotation,
-                                          HttpServletRequest request, HttpServletResponse response,
+                                          HttpServletRequest request, HttpServletResponse response, Object result,
                                           String correlationId, Instant timestamp, long duration, int statusCode) {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         String controllerName = joinPoint.getTarget().getClass().getSimpleName();
@@ -195,8 +194,8 @@ public class RecordIOAspect {
         // Build request data
         entry.setRequest(buildRequestData(request, annotation));
 
-        // Build response data
-        entry.setResponse(buildResponseData(response, statusCode, annotation));
+        // Build response data - pass the result object to capture the response body
+        entry.setResponse(buildResponseData(response, statusCode, result, annotation));
 
         // Build metadata
         String[] activeProfiles = environment.getActiveProfiles();
@@ -233,7 +232,7 @@ public class RecordIOAspect {
         return data;
     }
 
-    private ResponseData buildResponseData(HttpServletResponse response, int statusCode, RecordIO annotation) {
+    private ResponseData buildResponseData(HttpServletResponse response, int statusCode, Object result, RecordIO annotation) {
         ResponseData data = new ResponseData();
         data.setStatus(statusCode);
 
@@ -244,8 +243,14 @@ public class RecordIOAspect {
             data.setHeaders(maskingService.maskHeaders(headers, annotation.maskFields()));
         }
 
-        // Response body
-        Object body = extractResponseBody(response);
+        // Response body - use the method return value directly
+        Object body = result;
+
+        // If no result, try to extract from response wrapper (fallback)
+        if (body == null) {
+            body = extractResponseBody(response);
+        }
+
         if (body != null) {
             data.setBody(maskingService.maskSensitiveData(body, annotation.maskFields()));
         }

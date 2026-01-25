@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html"},{"l":"com.lognet.recordio.annotation"},{"l":"com.lognet.recordio.aspect"},{"l":"com.lognet.recordio.config"},{"l":"com.lognet.recordio.enums"},{"l":"com.lognet.recordio.filter"},{"l":"com.lognet.recordio.model"},{"l":"com.lognet.recordio.service"}];updateSearchResults();

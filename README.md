@@ -19,6 +19,8 @@
 ## Features
 
 - **Annotation-driven** - Simply add `@RecordIO` to controllers or methods
+- **Organized folder structure** - Files organized by Controller/Method/request|response
+- **Separate request/response files** - Request and response saved independently
 - **Automatic masking** - Protect sensitive data like passwords and tokens
 - **Flexible output** - JSON or XML format with optional pretty printing
 - **Async writing** - Non-blocking file operations for minimal latency impact
@@ -29,12 +31,18 @@
 
 ### 1. Add Dependency
 
+**Maven:**
 ```xml
 <dependency>
-    <groupId>com.lognet</groupId>
+    <groupId>io.github.talayash</groupId>
     <artifactId>recordio-spring-boot-starter</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.3</version>
 </dependency>
+```
+
+**Gradle:**
+```groovy
+implementation 'io.github.talayash:recordio-spring-boot-starter:1.0.3'
 ```
 
 ### 2. Annotate Your Controller
@@ -52,7 +60,21 @@ public class BookingController {
 }
 ```
 
-### 3. Configure (Optional)
+### 3. Check Output
+
+Files are organized in a structured folder hierarchy:
+
+```
+records/
+└── BookingController/
+    └── createBooking/
+        ├── request/
+        │   └── 20260125_143052_123_a1b2c3d4.json
+        └── response/
+            └── 20260125_143052_123_a1b2c3d4.json
+```
+
+### 4. Configure (Optional)
 
 ```yaml
 recordio:
@@ -74,7 +96,7 @@ recordio:
 | Option | Default | Description |
 |--------|---------|-------------|
 | `enabled` | `true` | Enable/disable recording |
-| `folder` | `records` | Output directory |
+| `folder` | `records` | Base output directory |
 | `format` | `JSON` | Output format (JSON/XML) |
 | `maskFields` | `[]` | Fields to mask |
 | `includeHeaders` | `true` | Include HTTP headers |

@@ -2,7 +2,6 @@ package com.lognet.recordio.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.dataformat.xml.XmlMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.lognet.recordio.config.RecordIOProperties;
 import com.lognet.recordio.enums.RecordFormat;
@@ -48,15 +47,23 @@ public class AsyncRecordWriter implements RecordWriter {
         this.jsonMapper.registerModule(new JavaTimeModule());
         this.jsonMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
-        ObjectMapper xmlMapperInstance = null;
+        this.xmlMapper = createXmlMapper();
+    }
+
+    /**
+     * Creates XmlMapper using reflection to avoid hard dependency on jackson-dataformat-xml.
+     */
+    private ObjectMapper createXmlMapper() {
         try {
-            xmlMapperInstance = new XmlMapper();
-            xmlMapperInstance.registerModule(new JavaTimeModule());
-            xmlMapperInstance.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        } catch (NoClassDefFoundError e) {
+            Class<?> xmlMapperClass = Class.forName("com.fasterxml.jackson.dataformat.xml.XmlMapper");
+            ObjectMapper mapper = (ObjectMapper) xmlMapperClass.getDeclaredConstructor().newInstance();
+            mapper.registerModule(new JavaTimeModule());
+            mapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            return mapper;
+        } catch (Exception e) {
             logger.debug("XML support not available - jackson-dataformat-xml not on classpath");
+            return null;
         }
-        this.xmlMapper = xmlMapperInstance;
     }
 
     @Override

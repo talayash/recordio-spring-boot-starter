@@ -81,11 +81,16 @@ public class AsyncRecordWriter implements RecordWriter {
 
     private void doWrite(RecordEntry entry, String folder, RecordFormat format, boolean prettyPrint) {
         try {
-            Path folderPath = Paths.get(folder);
-            Files.createDirectories(folderPath);
+            // Build folder structure: baseFolder/Controller/method/
+            String controller = sanitizeForFilename(entry.getMetadata().getController());
+            String method = sanitizeForFilename(entry.getMetadata().getMethod());
+            Path basePath = Paths.get(folder, controller, method);
 
-            String filename = generateFilename(entry, format);
-            Path filePath = folderPath.resolve(filename);
+            // Create request and response subfolders
+            Path requestFolder = basePath.resolve("request");
+            Path responseFolder = basePath.resolve("response");
+            Files.createDirectories(requestFolder);
+            Files.createDirectories(responseFolder);
 
             ObjectMapper mapper = getMapper(format);
             if (mapper == null) {
@@ -93,20 +98,32 @@ public class AsyncRecordWriter implements RecordWriter {
                 mapper = jsonMapper;
             }
 
-            String content;
-            if (prettyPrint) {
-                content = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(entry);
-            } else {
-                content = mapper.writeValueAsString(entry);
+            String filename = generateFilename(entry, format);
+
+            // Write request file
+            if (entry.getRequest() != null) {
+                Path requestFile = requestFolder.resolve(filename);
+                String requestContent = prettyPrint
+                        ? mapper.writerWithDefaultPrettyPrinter().writeValueAsString(entry.getRequest())
+                        : mapper.writeValueAsString(entry.getRequest());
+                Files.writeString(requestFile, requestContent);
+                logger.debug("Request written to: {}", requestFile);
             }
 
-            Files.writeString(filePath, content);
-            logger.debug("Record written to: {}", filePath);
+            // Write response file
+            if (entry.getResponse() != null) {
+                Path responseFile = responseFolder.resolve(filename);
+                String responseContent = prettyPrint
+                        ? mapper.writerWithDefaultPrettyPrinter().writeValueAsString(entry.getResponse())
+                        : mapper.writeValueAsString(entry.getResponse());
+                Files.writeString(responseFile, responseContent);
+                logger.debug("Response written to: {}", responseFile);
+            }
 
             // Perform file rotation if enabled
             if (fileRotationService != null && properties.getFileRotation().isEnabled()) {
-                fileRotationService.rotate(folderPath, entry.getMetadata().getController(),
-                        entry.getMetadata().getMethod());
+                fileRotationService.rotate(requestFolder, controller, method);
+                fileRotationService.rotate(responseFolder, controller, method);
             }
 
         } catch (IOException e) {
@@ -122,8 +139,6 @@ public class AsyncRecordWriter implements RecordWriter {
     }
 
     private String generateFilename(RecordEntry entry, RecordFormat format) {
-        String controller = sanitizeForFilename(entry.getMetadata().getController());
-        String method = sanitizeForFilename(entry.getMetadata().getMethod());
         String timestamp = FILENAME_FORMATTER.format(Instant.now());
         String correlationId = entry.getCorrelationId();
         if (correlationId != null && correlationId.length() > 8) {
@@ -131,7 +146,7 @@ public class AsyncRecordWriter implements RecordWriter {
         }
 
         String extension = format == RecordFormat.XML ? "xml" : "json";
-        return String.format("%s_%s_%s_%s.%s", controller, method, timestamp, correlationId, extension);
+        return String.format("%s_%s.%s", timestamp, correlationId, extension);
     }
 
     private String sanitizeForFilename(String input) {

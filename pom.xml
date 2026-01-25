@@ -4,13 +4,36 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.lognet</groupId>
+    <groupId>io.github.talayash</groupId>
     <artifactId>recordio-spring-boot-starter</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
     <name>RecordIO Spring Boot Starter</name>
     <description>A Spring Boot annotation library for automatic HTTP request/response recording</description>
+    <url>https://github.com/talayash/recordio-spring-boot-starter</url>
+
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>talayash</id>
+            <name>Tal Ayash</name>
+            <email>talayash@gmail.com</email>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://github.com/talayash/recordio-spring-boot-starter.git</connection>
+        <developerConnection>scm:git:ssh://github.com:talayash/recordio-spring-boot-starter.git</developerConnection>
+        <url>https://github.com/talayash/recordio-spring-boot-starter</url>
+    </scm>
 
     <properties>
         <java.version>17</java.version>
@@ -129,6 +152,32 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <!-- GPG Signing -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-gpg-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>sign-artifacts</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>sign</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <!-- Central Publishing -->
+            <plugin>
+                <groupId>org.sonatype.central</groupId>
+                <artifactId>central-publishing-maven-plugin</artifactId>
+                <version>0.6.0</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <publishingServerId>central</publishingServerId>
+                    <autoPublish>true</autoPublish>
+                </configuration>
             </plugin>
         </plugins>
     </build>

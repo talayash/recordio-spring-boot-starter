@@ -220,7 +220,7 @@ public class RecordIOAspect {
         // Query parameters
         Map<String, String> queryParams = extractQueryParams(request);
         if (!queryParams.isEmpty()) {
-            data.setQueryParams(queryParams);
+            data.setQueryParams(maskingService.maskHeaders(queryParams, annotation.maskFields()));
         }
 
         // Request body

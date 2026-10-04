@@ -1,5 +1,8 @@
 package com.lognet.recordio.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.lognet.recordio.config.RecordIOProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,12 +10,13 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Service for masking sensitive data in recorded request/response bodies and headers.
@@ -21,23 +25,36 @@ public class MaskingService {
 
     private static final Logger logger = LoggerFactory.getLogger(MaskingService.class);
 
+    /**
+     * A pattern made only of word characters (e.g. "password") is a field name;
+     * anything else (e.g. "\\d{16}") is a regex applied to string values.
+     */
+    private static final Pattern FIELD_NAME = Pattern.compile("[A-Za-z0-9_-]+");
+
     private final RecordIOProperties properties;
     private final List<Pattern> compiledPatterns;
     private final Set<String> fieldPatterns;
+    private final ObjectMapper objectMapper;
 
     public MaskingService(RecordIOProperties properties) {
         this.properties = properties;
         this.compiledPatterns = new ArrayList<>();
         this.fieldPatterns = new HashSet<>();
+        this.objectMapper = new ObjectMapper()
+                .registerModule(new JavaTimeModule())
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
 
         if (properties.getMasking().isEnabled()) {
             for (String pattern : properties.getMasking().getPatterns()) {
-                try {
-                    // Try to compile as regex
-                    compiledPatterns.add(Pattern.compile(pattern, Pattern.CASE_INSENSITIVE));
-                } catch (Exception e) {
-                    // If not a valid regex, treat as literal field name
+                if (FIELD_NAME.matcher(pattern).matches()) {
                     fieldPatterns.add(pattern.toLowerCase());
+                    continue;
+                }
+                try {
+                    compiledPatterns.add(Pattern.compile(pattern, Pattern.CASE_INSENSITIVE));
+                } catch (PatternSyntaxException e) {
+                    logger.warn("Ignoring invalid masking pattern '{}': {}", pattern, e.getMessage());
                 }
             }
         }
@@ -66,9 +83,9 @@ public class MaskingService {
     }
 
     /**
-     * Masks headers based on configured patterns.
+     * Masks headers (or query parameters) based on configured patterns.
      *
-     * @param headers         the headers to mask
+     * @param headers         the headers or query parameters to mask
      * @param additionalFields additional field names to mask
      * @return the masked headers
      */
@@ -84,7 +101,7 @@ public class MaskingService {
             }
         }
 
-        Map<String, String> masked = new HashMap<>();
+        Map<String, String> masked = new LinkedHashMap<>();
         for (Map.Entry<String, String> entry : headers.entrySet()) {
             String key = entry.getKey();
             String value = entry.getValue();
@@ -101,30 +118,37 @@ public class MaskingService {
         return masked;
     }
 
-    @SuppressWarnings("unchecked")
     private Object maskObject(Object obj, Set<String> allFieldPatterns) {
         if (obj == null) {
             return null;
         }
 
         if (obj instanceof Map) {
-            return maskMap((Map<String, Object>) obj, allFieldPatterns);
+            return maskMap((Map<?, ?>) obj, allFieldPatterns);
         } else if (obj instanceof Collection) {
             return maskCollection((Collection<?>) obj, allFieldPatterns);
         } else if (obj.getClass().isArray()) {
             return maskArray(obj, allFieldPatterns);
         } else if (obj instanceof String) {
             return maskStringValue((String) obj);
+        } else if (obj instanceof Number || obj instanceof Boolean || obj instanceof Character) {
+            return obj;
         }
 
-        return obj;
+        // POJOs, records, dates, enums: convert to Map/List/String so their fields can be masked
+        try {
+            return maskObject(objectMapper.convertValue(obj, Object.class), allFieldPatterns);
+        } catch (IllegalArgumentException e) {
+            logger.debug("Could not convert {} for masking: {}", obj.getClass().getName(), e.getMessage());
+            return obj;
+        }
     }
 
-    private Map<String, Object> maskMap(Map<String, Object> map, Set<String> allFieldPatterns) {
-        Map<String, Object> masked = new HashMap<>();
+    private Map<String, Object> maskMap(Map<?, ?> map, Set<String> allFieldPatterns) {
+        Map<String, Object> masked = new LinkedHashMap<>();
 
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            String key = entry.getKey();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            String key = String.valueOf(entry.getKey());
             Object value = entry.getValue();
 
             if (shouldMaskField(key, allFieldPatterns)) {
